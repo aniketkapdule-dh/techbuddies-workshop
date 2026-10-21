@@ -14,18 +14,22 @@ Hands-on workshop demonstrating how to build streaming and batch data pipelines 
 Clone the repository and run the setup script:
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/aniketkapdule-dh/techbuddies-workshop.git
 cd techbuddies-workshop
 ./setup.sh
 ```
 
+**Prerequisites:** `git`, a terminal with `bash` and `curl` (macOS or Linux; on Windows use [WSL](https://learn.microsoft.com/windows/wsl/install)), an internet connection, and about 5 GB of free disk space. Nothing else is needed. You do not need Python or uv installed.
+
 `./setup.sh` will automatically:
-1. Verify Python 3.10+ is available.
-2. Create and configure a local virtual environment (`.venv`) using `uv` (or standard `python3 -m venv`).
-3. Install all required dependencies (`lancedb`, `sentence-transformers`, `polars`, `requests`, `ipykernel`, `pip`).
+1. Install `uv` if it is missing (uv also downloads Python 3.12 for you).
+2. Create a local virtual environment (`.venv`).
+3. Install all pinned dependencies from `uv.lock` (`lancedb`, `sentence-transformers`, `polars`, `requests`, `ipykernel`, `pip`).
 4. Register the Jupyter kernel as **`Python (techbuddies-workshop)`**.
 5. Set up editor defaults for VS Code and PyCharm.
-6. Verify local Ollama installation and download the `gemma2:2b` model.
+6. Offer to install Ollama (asks first), start it, and download the `gemma2:2b` model. Set `WORKSHOP_INSTALL_OLLAMA=yes` to skip the prompt.
+
+If `uv` was just installed, open a new terminal (or run `source ~/.zshrc`) afterwards so it is on your `PATH`.
 
 ---
 

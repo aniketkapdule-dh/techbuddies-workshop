@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Setup script for Data Pipelines for AI Agents Workshop
-# Works seamlessly on macOS and Linux for VS Code, PyCharm, and Jupyter
+# Works on macOS and Linux (Windows: use WSL) for VS Code, PyCharm, and Jupyter.
+# Starts from a bare machine: installs uv, which in turn downloads Python.
+# Only requirements: bash, and curl or wget.
 # ==============================================================================
 
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
+
+PYTHON_VERSION="3.12"
+MODEL="gemma2:2b"
 
 # Color formatting
 BOLD="\033[1m"
@@ -21,72 +26,83 @@ echo -e "${BOLD}${BLUE}=========================================================
 echo -e "${BOLD}${BLUE}  Data Pipelines for AI Agents Workshop - Environment Setup       ${NC}"
 echo -e "${BOLD}${BLUE}====================================================================${NC}"
 echo ""
+echo "Heads up: the first run downloads several GB (PyTorch, embedding model)."
+echo "Make sure you have an internet connection and about 5 GB of free disk space."
+echo ""
+
+# Ask a yes/no question. Defaults to "no" when not interactive, unless the
+# environment variable named in $2 is set to "yes".
+ask_yes_no() {
+    local prompt="$1" env_var="$2" answer=""
+    if [ "${!env_var:-}" = "yes" ]; then
+        return 0
+    fi
+    if [ -t 0 ]; then
+        read -r -p "$prompt [y/N] " answer || true
+        case "$answer" in
+            y|Y|yes|YES) return 0 ;;
+        esac
+    fi
+    return 1
+}
+
+download() {
+    # download <url>: print the body to stdout using curl or wget
+    if command -v curl >/dev/null 2>&1; then
+        curl -LsSf "$1"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO- "$1"
+    else
+        echo -e "${YELLOW}❌ Neither curl nor wget found. Please install one of them and re-run.${NC}" >&2
+        return 1
+    fi
+}
 
 # ------------------------------------------------------------------------------
-# 1. Check Python installation (Python >= 3.10 required)
+# 1. Ensure uv is installed (uv manages Python itself, no system Python needed)
 # ------------------------------------------------------------------------------
-echo -e "${CYAN}[1/5] Checking Python installation...${NC}"
+echo -e "${CYAN}[1/5] Checking uv (Python and package manager)...${NC}"
 
-PYTHON_BIN=""
-if command -v python3 >/dev/null 2>&1; then
-    PYTHON_BIN="python3"
-elif command -v python >/dev/null 2>&1; then
-    PYTHON_BIN="python"
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+
+if command -v uv >/dev/null 2>&1; then
+    echo -e "${GREEN}✓ Found $(uv --version)${NC}"
+else
+    echo "  uv not found. Installing it now (https://docs.astral.sh/uv/)..."
+    download https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+    if ! command -v uv >/dev/null 2>&1; then
+        echo -e "${YELLOW}❌ uv installation did not succeed. Install it manually from https://docs.astral.sh/uv/ and re-run.${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✓ Installed $(uv --version)${NC}"
 fi
-
-if [ -z "$PYTHON_BIN" ]; then
-    echo -e "${YELLOW}❌ Python 3 was not found on your system.${NC}"
-    echo "Please install Python 3.10 or newer (via python.org, Homebrew, or your OS package manager)."
-    exit 1
-fi
-
-PY_VERSION=$("$PYTHON_BIN" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-PY_MAJOR=$("$PYTHON_BIN" -c "import sys; print(sys.version_info.major)")
-PY_MINOR=$("$PYTHON_BIN" -c "import sys; print(sys.version_info.minor)")
-
-if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]; }; then
-    echo -e "${YELLOW}❌ Detected Python $PY_VERSION. Python 3.10+ is required.${NC}"
-    exit 1
-fi
-echo -e "${GREEN}✓ Found Python $PY_VERSION ($PYTHON_BIN)${NC}"
 
 # ------------------------------------------------------------------------------
-# 2. Setup Virtual Environment
+# 2. Create virtual environment (uv downloads Python $PYTHON_VERSION if needed)
 # ------------------------------------------------------------------------------
 echo ""
-echo -e "${CYAN}[2/5] Creating / Verifying virtual environment (.venv)...${NC}"
+echo -e "${CYAN}[2/5] Creating / verifying virtual environment (.venv, Python ${PYTHON_VERSION})...${NC}"
 
 VENV_DIR="$SCRIPT_DIR/.venv"
 
-if command -v uv >/dev/null 2>&1; then
-    echo -e "  Using ${BOLD}uv${NC} for ultrafast virtualenv and package management."
-    if [ ! -d "$VENV_DIR" ]; then
-        uv venv --seed "$VENV_DIR"
-    fi
-    # Ensure pip is installed in the virtualenv for Jupyter %pip compatibility
-    uv pip install --quiet pip
-    VENV_PYTHON="$VENV_DIR/bin/python"
-else
-    echo "  uv not detected; using standard python venv module."
-    if [ ! -d "$VENV_DIR" ]; then
-        "$PYTHON_BIN" -m venv "$VENV_DIR"
-    fi
-    VENV_PYTHON="$VENV_DIR/bin/python"
-    "$VENV_PYTHON" -m pip install --quiet --upgrade pip
+if [ ! -x "$VENV_DIR/bin/python" ]; then
+    uv venv --seed --python "$PYTHON_VERSION" "$VENV_DIR"
 fi
+VENV_PYTHON="$VENV_DIR/bin/python"
 
-echo -e "${GREEN}✓ Virtual environment configured at $VENV_DIR${NC}"
+echo -e "${GREEN}✓ Virtual environment ready at $VENV_DIR ($("$VENV_PYTHON" --version))${NC}"
 
 # ------------------------------------------------------------------------------
-# 3. Install Required Dependencies
+# 3. Install Required Dependencies (pinned via uv.lock)
 # ------------------------------------------------------------------------------
 echo ""
-echo -e "${CYAN}[3/5] Installing workshop dependencies...${NC}"
+echo -e "${CYAN}[3/5] Installing workshop dependencies (this can take a few minutes)...${NC}"
 
-if command -v uv >/dev/null 2>&1; then
-    uv pip install -r "$SCRIPT_DIR/requirements.txt"
+if [ -f "$SCRIPT_DIR/uv.lock" ]; then
+    UV_PROJECT_ENVIRONMENT="$VENV_DIR" uv sync --python "$VENV_PYTHON"
 else
-    "$VENV_PYTHON" -m pip install -r "$SCRIPT_DIR/requirements.txt"
+    uv pip install --python "$VENV_PYTHON" -r "$SCRIPT_DIR/requirements.txt"
 fi
 
 echo -e "${GREEN}✓ Dependencies installed (lancedb, sentence-transformers, polars, requests, ipykernel).${NC}"
@@ -113,16 +129,48 @@ echo -e "${GREEN}✓ Jupyter kernel 'Python (techbuddies-workshop)' registered.$
 echo -e "${GREEN}✓ VS Code configuration (.vscode/settings.json) updated.${NC}"
 
 # ------------------------------------------------------------------------------
-# 5. Check Ollama & LLM Model (Parts 4 & 5)
+# 5. Ollama & LLM Model (Parts 4 & 5)
 # ------------------------------------------------------------------------------
 echo ""
-echo -e "${CYAN}[5/5] Checking Ollama (local LLM for Parts 4 & 5)...${NC}"
+echo -e "${CYAN}[5/5] Setting up Ollama (local LLM for Parts 4 & 5)...${NC}"
 
-MODEL="gemma2:2b"
+OLLAMA_MANUAL_HINT=""
+OS="$(uname -s)"
+
+if ! command -v ollama >/dev/null 2>&1; then
+    echo -e "${YELLOW}ℹ️  Ollama is not installed.${NC}"
+    if ask_yes_no "  Install Ollama now (about 1.6 GB model download follows)?" WORKSHOP_INSTALL_OLLAMA; then
+        if [ "$OS" = "Darwin" ]; then
+            if command -v brew >/dev/null 2>&1; then
+                brew install ollama || true
+            else
+                OLLAMA_MANUAL_HINT="Homebrew not found. Download the Ollama app from https://ollama.com/download"
+            fi
+        else
+            # Official installer (may ask for sudo)
+            download https://ollama.com/install.sh | sh || true
+        fi
+    else
+        OLLAMA_MANUAL_HINT="Skipped. Install later from https://ollama.com/download (macOS: brew install ollama)"
+    fi
+fi
+
 if command -v ollama >/dev/null 2>&1; then
     echo -e "${GREEN}✓ Ollama CLI is installed.${NC}"
+
+    if ! curl -s http://localhost:11434/api/tags >/dev/null 2>&1; then
+        echo "  Starting Ollama server in the background..."
+        nohup ollama serve >/dev/null 2>&1 &
+        for _ in $(seq 1 20); do
+            if curl -s http://localhost:11434/api/tags >/dev/null 2>&1; then
+                break
+            fi
+            sleep 1
+        done
+    fi
+
     if curl -s http://localhost:11434/api/tags >/dev/null 2>&1; then
-        echo -e "${GREEN}✓ Ollama server is currently running.${NC}"
+        echo -e "${GREEN}✓ Ollama server is running.${NC}"
         if ollama list 2>/dev/null | grep -q "$MODEL"; then
             echo -e "${GREEN}✓ Model '$MODEL' is already pulled and ready.${NC}"
         else
@@ -131,27 +179,16 @@ if command -v ollama >/dev/null 2>&1; then
             echo -e "${GREEN}✓ Model '$MODEL' downloaded successfully.${NC}"
         fi
     else
-        echo -e "${YELLOW}ℹ️  Ollama server is not running right now.${NC}"
-        echo "   Before executing Parts 4 & 5, start it in a separate terminal with:"
+        echo -e "${YELLOW}ℹ️  Could not start the Ollama server automatically.${NC}"
+        echo "   Before executing Parts 4 & 5, run in a separate terminal:"
         echo -e "     ${BOLD}ollama serve${NC}"
         echo "   And download the model with:"
         echo -e "     ${BOLD}ollama pull $MODEL${NC}"
     fi
 else
-    echo -e "${YELLOW}ℹ️  Ollama is not installed.${NC}"
-    OS="$(uname -s)"
-    if [ "$OS" = "Darwin" ]; then
-        echo "   To enable local LLM answers on macOS:"
-        echo -e "     1. Install Ollama: ${BOLD}brew install ollama${NC} (or from https://ollama.com)"
-        echo -e "     2. Start the server: ${BOLD}ollama serve${NC}"
-        echo -e "     3. Pull the model:   ${BOLD}ollama pull $MODEL${NC}"
-    else
-        echo "   To enable local LLM answers on Linux:"
-        echo -e "     1. Install Ollama: ${BOLD}curl -fsSL https://ollama.com/install.sh | sh${NC}"
-        echo -e "     2. Start the server: ${BOLD}ollama serve${NC}"
-        echo -e "     3. Pull the model:   ${BOLD}ollama pull $MODEL${NC}"
-    fi
-    echo "   (Note: If Ollama is not running, the notebook automatically falls back to template answers.)"
+    [ -n "$OLLAMA_MANUAL_HINT" ] && echo "   $OLLAMA_MANUAL_HINT"
+    echo "   Then run: ollama serve  and  ollama pull $MODEL"
+    echo "   (Note: without Ollama the notebook automatically falls back to template answers.)"
 fi
 
 # ------------------------------------------------------------------------------
