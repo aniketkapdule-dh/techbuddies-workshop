@@ -1,0 +1,13 @@
+[project]
+name = "techbuddies-workshop"
+version = "0.1.0"
+description = "Designing data pipelines for AI agents workshop"
+requires-python = ">=3.10"
+dependencies = [
+    "ipykernel>=6.29.0",
+    "lancedb>=0.17.0",
+    "sentence-transformers>=3.0.0",
+    "polars>=1.0.0",
+    "requests>=2.31.0",
+    "pip",
+]

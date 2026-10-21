@@ -1,0 +1,35 @@
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python cache & artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# IDEs
+.DS_Store
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/shelf/
+.idea/.gitignore
+.vscode/*
+!.vscode/settings.json
+
+# LanceDB data directories
+*.lance/
+.lance/
+
+# Extra venvs, local tooling, generated data
+.venv-1/
+.claude/
+.idea/
+delivery_hero_vector_db/
