@@ -1,0 +1,19 @@
+.gitignore
+  s_96cf3a30c26565::t_1d62b73e901626 1-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "da3ed35e2599b714bb682477a1a960ff217c9292",
+  "prompts": {},
+  "sessions": {
+    "s_96cf3a30c26565": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "289eebdd-d930-4ce9-a445-51c5a5fbc822",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "aniketkapdule-dh <aniket.kapdule@deliveryhero.com>"
+    }
+  }
+}
